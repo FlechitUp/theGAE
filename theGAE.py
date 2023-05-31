@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+from numpy.random import normal as gaus
 import pandas as pd
 import networkx as nx
 from sklearn.model_selection import train_test_split
@@ -75,21 +76,22 @@ if __name__ == '__main__':
     labels = []
 
     def add_nodes_edges(G, edges):
-        # Agregar nodos con sus características geolocalizadas
-        G.add_node(0, features={"crime_type": "0"})
-        G.add_node(1, features={"crime_type": "0"})
-        G.add_node(2, features={"crime_type": "0"})
-        G.add_node(3, features={"crime_type": "0"})
+        sig = 0.2 # Desviación estándar 
+        # Add nodos con sus características
+        G.add_node(0, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":1+gaus(0, sig), "x4":1+gaus(0, sig) })
+        G.add_node(1, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":1+gaus(0, sig), "x4":1+gaus(0, sig) })
+        G.add_node(2, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":1+gaus(0, sig), "x4":1+gaus(0, sig) })
+        G.add_node(3, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":1+gaus(0, sig), "x4":1+gaus(0, sig) })
     
-        G.add_node(4, features={"crime_type": "1"})
-        G.add_node(5, features={"crime_type": "1"})
-        G.add_node(6, features={"crime_type": "1"})
-        G.add_node(7, features={"crime_type": "1"})
-        G.add_node(8, features={"crime_type": "1"})
+        G.add_node(4, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":1+gaus(0, sig), "x4":-1+gaus(0, sig)})
+        G.add_node(5, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":1+gaus(0, sig), "x4":-1+gaus(0, sig)})
+        G.add_node(6, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":1+gaus(0, sig), "x4":-1+gaus(0, sig)})
+        G.add_node(7, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":1+gaus(0, sig), "x4":-1+gaus(0, sig)})
+        G.add_node(8, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":1+gaus(0, sig), "x4":-1+gaus(0, sig)})
     
-        G.add_node(9 , features={"crime_type": "2"})
-        G.add_node(10, features={"crime_type": "2"})
-        G.add_node(11, features={"crime_type": "2"})
+        G.add_node(9 , features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":-1+gaus(0, sig), "x4":1+gaus(0, sig)})
+        G.add_node(10, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":-1+gaus(0, sig), "x4":1+gaus(0, sig)})
+        G.add_node(11, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":-1+gaus(0, sig), "x4":1+gaus(0, sig)})
     
         # Crear edges en el grafo
         edges = [(0, 1), (0, 2), (0, 3), (1,2), (2, 3), (3, 1),
@@ -102,18 +104,30 @@ if __name__ == '__main__':
     if (len(sys.argv)==1):
         print("Small graph")
         add_nodes_edges(G, edges)
-        hidden_dim = 16
+        hidden_dim = 2 # 16
         labels = [0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2 ]
         n_components = 3
+        numeric_features = ['crime_type', 'x2', 'x3', 'x4']
+        # criar histograma por quantidade de crime
+        plt.subplot(232)
+        plt.hist(labels, bins=max(labels)+1)
+        plt.title("Histogram of crimes")
+
     elif (sys.argv[1] =="-h"):
         print("Run with a small graph: \n python theGAE.py")
         print("Run with a graph using csv: \n python theGAE.py -csv")
+
     elif(sys.argv[1] =="-csv"):
         print("Graph from csv")
         argument = str(sys.argv[1])
         read_graph_from_csv(file1, file2, G, edges, labels)
-        n_components = contar_elementos_no_repetidos(labels)
         hidden_dim = 42
+        n_components = contar_elementos_no_repetidos(labels)
+        numeric_features = ['crime_type']
+        # criar histograma por quantidade de crime
+        plt.subplot(232)
+        plt.hist(labels, bins=max(labels)+1)
+        plt.title("Histogram of crimes")        
         
     #print('----------------------------')
     #print(G.nodes(data=True))
@@ -121,7 +135,7 @@ if __name__ == '__main__':
     #print('----------------------------')
 
     plt.figure(1)
-    plt.subplot(221)
+    plt.subplot(231)
     nx.draw(G, with_labels = True)
     #plt.show()
 
@@ -137,8 +151,7 @@ if __name__ == '__main__':
         label_encoders[feature] = LabelEncoder()
         node_features[feature] = label_encoders[feature].fit_transform(node_features[feature])"""
 
-    # Normalizar las características numéricas
-    numeric_features = ['crime_type']
+    # Normalizar as caraterísticas numéricas da lista: numeric_features
     scaler = StandardScaler()
     node_features[numeric_features] = scaler.fit_transform(node_features[numeric_features])
     """numeric_features = ['population_density', 'age_median', 'employment_rate'] # 'latitude', 'longitude', 
@@ -165,8 +178,8 @@ if __name__ == '__main__':
     class GraphAutoencoder(nn.Module):
         def __init__(self, input_dim, hidden_dim):
             super(GraphAutoencoder, self).__init__()
-            self.conv1 = GCNConv(input_dim, hidden_dim)
-            self.conv2 = GCNConv(hidden_dim, hidden_dim)
+            self.conv1 = GCNConv(input_dim, hidden_dim +1)
+            self.conv2 = GCNConv(hidden_dim +1, hidden_dim)
             self.decoder = nn.Sequential(
                 nn.Linear(hidden_dim, input_dim),
                 nn.ReLU()
@@ -216,23 +229,26 @@ if __name__ == '__main__':
     from sklearn.manifold import TSNE
     
     #labels = [0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2 ]
-    print('labels = ======================================= ')
+    print('labels = ======================================= ',len(labels))
     print((labels))
-    tsne = TSNE(n_components=3, random_state=37) #42
+    tsne = TSNE(n_components=3, random_state=37) #42 #init='pca', 
     
     # Perform t-SNE dimensionality reduction
     X_tsne = tsne.fit_transform(embeddings)
     #print('+++', X_tsne)
     
-
-    ax.scatter(trans_data[:,0][0:mid], trans_data[:,1][0:mid], trans_data[:,2][0:mid], c= 'r', s = 100, marker='+')
-
-
+    var_3d = False
+    mid = int(len(embeddings)/2)
+    #print('mid ======================================= ', X_tsne[:,0][0:mid])
     # Display the plot
-    plt.subplot(222)
+    if (var_3d): plt.subplot(233,  projection='3d')
+    else: plt.subplot(233)
     
     # Create a scatter plot with different colors for each cluster
-    plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=labels, cmap='viridis')
+    if (var_3d): 
+        plt.scatter(X_tsne[:,0][0:mid], X_tsne[:,1][0:mid], X_tsne[:,2][0:mid], c= 'r', marker='+')
+        plt.scatter(X_tsne[:,0][mid:], X_tsne[:,1][mid:], X_tsne[:,2][mid:], c= 'b', marker='.')
+    else: plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=labels, cmap='viridis')
     
     # Add a colorbar legend
     plt.colorbar()
@@ -240,6 +256,7 @@ if __name__ == '__main__':
     # Add labels and title
     plt.xlabel('t-SNE Dimension 1')
     plt.ylabel('t-SNE Dimension 2')
+    #if (var_3d): plt.set_zlabel('t-SNE Dimension 3')
     plt.title('t-SNE Visualization with Clusters')
     
     
@@ -265,8 +282,9 @@ if __name__ == '__main__':
         else:
             color_map.append('green')
     
-    plt.subplot(223)
+    plt.subplot(234)
     nx.draw(G, node_color=color_map, with_labels=True)
+
     plt.show()
     
     ########### kmeans ############
