@@ -70,8 +70,8 @@ if __name__ == '__main__':
     # Crear el grafo de Networkx con nodos geolocalizados y 8 características
     G = nx.Graph()
     edges = []
-    file1 = 'nodos_subgrafo.csv'
-    file2 = 'aristas_subgrafo.csv'
+    file1 = 'nodos_subgrafo3.csv'
+    file2 = 'aristas_subgrafo3.csv'
     hidden_dim = 0
     labels = []
 
@@ -93,6 +93,9 @@ if __name__ == '__main__':
         G.add_node(10, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":-1+gaus(0, sig), "x4":1+gaus(0, sig)})
         G.add_node(11, features={"crime_type": 1+gaus(0, sig), "x2": 1+gaus(0, sig), "x3":-1+gaus(0, sig), "x4":1+gaus(0, sig)})
     
+
+        #G.add_node(0, features={"crime_type": [1+gaus(0, sig), 1+gaus(0, sig), 1+gaus(0, sig), 1+gaus(0, sig) ] })
+       
         # Crear edges en el grafo
         edges = [(0, 1), (0, 2), (0, 3), (1,2), (2, 3), (3, 1),
              (4,5),(4,6),(4,7),(4,8),(5,8),(5,6),(5,7),(6,7),(6,8),(7,8),
@@ -121,7 +124,7 @@ if __name__ == '__main__':
         print("Graph from csv")
         argument = str(sys.argv[1])
         read_graph_from_csv(file1, file2, G, edges, labels)
-        hidden_dim = 42
+        hidden_dim = 42  # alterar 
         n_components = contar_elementos_no_repetidos(labels)
         numeric_features = ['crime_type']
         # criar histograma por quantidade de crime
@@ -178,8 +181,8 @@ if __name__ == '__main__':
     class GraphAutoencoder(nn.Module):
         def __init__(self, input_dim, hidden_dim):
             super(GraphAutoencoder, self).__init__()
-            self.conv1 = GCNConv(input_dim, hidden_dim +1)
-            self.conv2 = GCNConv(hidden_dim +1, hidden_dim)
+            self.conv1 = GCNConv(input_dim, hidden_dim)
+            self.conv2 = GCNConv(hidden_dim, hidden_dim)
             self.decoder = nn.Sequential(
                 nn.Linear(hidden_dim, input_dim),
                 nn.ReLU()
