@@ -23,6 +23,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from torch_geometric.nn import GCNConv
 import torch_geometric.utils as utils
+import matplotlib as mp
 import matplotlib.pyplot as plt
 import sys
 import networkx as nx
@@ -30,6 +31,7 @@ import pandas as pd
 from collections import Counter
 import ast
 import random
+import folium
 
 np.random.seed(37)
 
@@ -46,31 +48,37 @@ def add_edges( G, edge_tuples):
 
 
 def read_graph_from_csv(file1, file2, G, edges, labels):
+    global lat_long_nodes
+    global df_aristas
+    
     df_nodos = pd.read_csv(file1)
     df_aristas = pd.read_csv(file2)
     
-    numeric_features = df_nodos.columns.tolist()[1:]
+    numeric_features = df_nodos.columns.tolist()[1:-2]  # get all columns except lat and long
+    lat_long_nodes = df_nodos.columns.tolist()[-2:] # get just lat and long
+    print('lat_long_nodes', lat_long_nodes)
+
     #labels = []
     for i in numeric_features:
         labels.append(df_nodos[i].sum())
     print('++++ frecuencias', labels, 'enbd', type(labels))
     # For DEBUGGING
     #print('ooo',numeric_features)
-
+    global mapping_lat_long, mapping
     mapping = {}
-    
+    mapping_lat_long = {}
 
     # Add nodes
     for i in range(len(df_nodos)):
         #print(df_nodos.iloc[i,0], df_nodos.iloc[i,1])
         nodo_id = G.number_of_nodes() 
         mapping[df_nodos['Nodo'][i]] = nodo_id
-        features_values = [df_nodos[x][i] for x in numeric_features]
+        features_values = [df_nodos[x][i] for x in numeric_features]# lat_long_nodes
         #print('feat_nodes', [df_nodos[x][i] for x in numeric_features])
         G.add_node(nodo_id, features={"crime_type": features_values })
+        mapping_lat_long[nodo_id] = [df_nodos['lat'][i] ,df_nodos['long'][i] ]
         #labels.append(features_values)
-    #print('labeeeeeeeeeeeeeeeeeeeeeeeelss', labels)
-    
+
     # Add edges
     for i in range(len(df_aristas)):
         nodo1_id = mapping[df_aristas['Nodo1'][i]]
@@ -86,10 +94,12 @@ if __name__ == '__main__':
     edges = []
     file1 = 'nodos_subgrafo' #month
     file2 = 'aristas_subgrafo'
+    file3 = 'nodos_lat_long'
     hidden_dim = 0
     labels = []
     numeric_features = []
     weekdays = []
+    choice = ''
 
     def add_nodes_edges(G, edges):
         sig = 0.2 # Desviación estándar 
@@ -144,39 +154,50 @@ if __name__ == '__main__':
         plt.subplot(232)
         
         if ( len(sys.argv) == 3 ):
+            subgraph = '52'
+            '''
+            '52' // Case Study
+            '6'  // Av. Paulista Bairro perigoso
+            '7'  // Bairro Vila Madalena (tranquilo)
+            '8'  // Perto da Rodoviaria Tiete
+            '''
         
             if (sys.argv[2] =="-f=1" or sys.argv[2] == "-1"):
-                file_str = '3all.csv'
+                choice = 'Frequency'
+                file_str = subgraph+'all.csv'
                 bins_customized = 'auto' #max(max(arr) for arr in labels)
                 hidden_dim = 1
                 weekdays = np.array(['Frequency'])
 
             elif(sys.argv[2] =="-f=month" or sys.argv[2] == "-m"):
-                file_str = '3month.csv'
-                hidden_dim = 12
+                choice = 'month'
+                file_str = subgraph+'month.csv'
+                hidden_dim = 8 #12
                 bins_customized = 12
                 weekdays = np.array(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct','Nov','Dec'])
 
             elif(sys.argv[2] =="-f=period" or sys.argv[2] == "-p" ):
-                file_str = '3period.csv'
+                choice = 'period'
+                file_str = subgraph+'period.csv'
                 hidden_dim = 5
                 bins_customized = 5
                 weekdays = np.array(['Unknow', 'morning', 'afternoon', 'night', 'early_morning'])
-
             elif(sys.argv[2] == "-f=week" or sys.argv[2] == "-w"):
-                file_str = '3week.csv'
-                hidden_dim = 7
+                choice = 'weekday'
+                file_str = subgraph+'week.csv'
+                hidden_dim = 6 #7
                 bins_customized=7
                 weekdays = np.array(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
-        
-        file1 += file_str
-        file2 += file_str
+        out_dim = 4
 
+        file1 += file_str
+        file2 += subgraph+'.csv'
+        file3 += subgraph+'.csv'
         
         numeric_features = read_graph_from_csv(file1, file2, G, edges, labels)
-        plt.bar(weekdays, labels, color ='maroon',width = 0.4)
+        plt.bar(weekdays, labels, color ='#F47C2F',width = 0.4)
         #plt.hist(labels, bins=bins_customized)
-        plt.title("Histogram of crimes")
+        plt.title("Subgraph crime histogram")
 
     plt.figure(1)
     plt.subplot(231)
@@ -199,7 +220,7 @@ if __name__ == '__main__':
         k = k + 1  
 
     node_features = pd.DataFrame.from_dict(data)
-    print(' ================ node_features', node_features)
+    # print(' ================ node_features', node_features)
     #####################################################################
     """datos_graph = []
     for node, data in G.nodes(data=True):
@@ -258,9 +279,24 @@ if __name__ == '__main__':
     
     # Asegurarse de que los índices de los bordes sean únicos y en el rango correcto
     edge_index, _ = utils.add_self_loops(edge_index, num_nodes=num_nodes)
+
+
+    from torch_geometric.nn import GAE
+    # Definir el modelo 2 del grafo autoencoder
+    class GCNEncoder(torch.nn.Module):
+        def __init__(self, input_dim, hidden_dim):
+            torch.random.manual_seed(37)
+            super(GCNEncoder, self).__init__()
+            self.conv1 = GCNConv(input_dim, hidden_dim, cached=True) # cached only for transductive learning
+            self.conv2 = GCNConv(hidden_dim, out_dim, cached=True) # cached only for transductive learning
+
+        def forward(self, x, edge_index):
+            x = self.conv1(x, edge_index).relu()
+            return self.conv2(x, edge_index)
+
     
-    # Definir el modelo del grafo autoencoder
-    class GraphAutoencoder(nn.Module):
+    # Definir el modelo 1 del grafo autoencoder
+    """class GraphAutoencoder(nn.Module):
         def __init__(self, input_dim, hidden_dim):
             torch.random.manual_seed(37)
             super(GraphAutoencoder, self).__init__()
@@ -275,39 +311,81 @@ if __name__ == '__main__':
             x = torch.relu(x)
             x = self.conv2(x, edge_index)
             x = self.decoder(x)
-            return x
+            return x"""
+            
     
-    # Definir los hiperparámetros del modelo
+    # Definir los hiperparámetros del modelo 1
     input_dim = features.size(1)
+    #print('######################3', features)
+    
     #hidden_dim = 40 # Already defined above 
     
-    # Crear una instancia del modelo
-    model = GraphAutoencoder(input_dim, hidden_dim)
+    # Crear una instancia del modelo 2
+    model = GAE(GCNEncoder(input_dim, hidden_dim))
+
+    # Crear una instancia del modelo 1
+    # model = GraphAutoencoder(input_dim, hidden_dim)
+
+    # Pro model 2 
+    # move to GPU (if available)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
     
     # Definir la función de pérdida y el optimizador
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     
+    # Entrenar el modelo 2
+    def train():
+        model.train()
+        optimizer.zero_grad()
+        z = model.encode(features, edge_index)
+        loss = model.recon_loss(z, edge_index)
+        #if args.variational:
+        #   loss = loss + (1 / data.num_nodes) * model.kl_loss()
+        loss.backward()
+        optimizer.step()
+        return float(loss)
     
-    # Entrenar el modelo
+    # Test para el modelo 2
+    """def test(pos_edge_index, neg_edge_index):
+        model.eval()
+        with torch.no_grad():
+            z = model.encode(features, edge_index)
+        return model.test(z, pos_edge_index, neg_edge_index)"""
+
     num_epochs = 100
+
+    # Entrenar el modelo 2
+    
+    for epoch in range(1, num_epochs+1):
+        loss = train()
+        #auc, ap = test(data.test_pos_edge_index, data.test_neg_edge_index)
+        #print('Epoch: {:03d}'.format(epoch))
+    
+    
+    # Entrenar el modelo 1
+    """num_epochs = 100
     for epoch in range(num_epochs):
         optimizer.zero_grad()
         outputs = model(features, edge_index)
         #print(train_nodes, 'len = ', (outputs))
         loss = criterion(outputs[train_nodes], features[train_nodes])
         loss.backward()
-        optimizer.step()
+        optimizer.step()"""
     
-    # Obtener las representaciones embebidas de los nodos
-    embeddings = model(features, edge_index).detach().numpy()
+    # Obtener las representaciones embebidas de los nodos para el modelo 1
+    #embeddings = model(features, edge_index).detach().numpy()
+
     
-    
-    # Encoding
-    x = model.conv1(features, edge_index)
+    # Encoding for model 1 
+    """x = model.conv1(features, edge_index)
     x = torch.relu(x)
     embeddings = model.conv2(x, edge_index)
-    embeddings = embeddings.detach().numpy()
+    embeddings = embeddings.detach().numpy()"""
+
+    # Encoding for model 2
+    embeddings = model.encode(features, edge_index).detach().numpy()
     
     ########### TSNE ############
     from sklearn.manifold import TSNE
@@ -381,6 +459,8 @@ if __name__ == '__main__':
     plt.show()
     
     ########### kmeans ############
+    
+    plt.figure(2)
 
     ########### TIME-SERIES ############
 
@@ -388,7 +468,7 @@ if __name__ == '__main__':
     node_features2 = pd.DataFrame.from_dict(data)
 
     def get_fetures_of_Node_from_Graph(number_node, verbose = False):
-        if verbose: print(node_features2.iloc[number_node].values)
+        if verbose: print(number_node, '=', node_features2.iloc[number_node].values)
         return node_features2.iloc[number_node].values
 
     num_nodes = input('Enter the AMOUNT of nodes: ')
@@ -397,27 +477,28 @@ if __name__ == '__main__':
         variable = input('# node ')
         nodes.append(int(variable))
     print('ok')
-    plt.subplot(121)
+    plt.subplot(221)
 
     # Defined Before  
     # weekdays = np.array([...])
     print(len(weekdays))
-
+    frequencies_nodes_selected = np.array([0] * len(weekdays))
     for i in range(int(num_nodes)):
         frequency = get_fetures_of_Node_from_Graph(nodes[i], True)
         dataframe = pd.DataFrame({'date_of_week': weekdays,
                               'frequency': frequency})
+        frequencies_nodes_selected += np.array(frequency)
         plt.plot(weekdays, dataframe.frequency, marker='o', label="node "+str(nodes[i]))
 
     # Giving title to the chart using plt.title and a legend
-    plt.title('Crimes by Day')
+    plt.title('Crimes by '+ choice)
     plt.legend(loc="upper left")
  
     # rotating the x-axis tick labels at 30degree  towards right
     plt.xticks(rotation=30, ha='right')
  
     # Providing x and y label to the chart
-    plt.xlabel('Day')
+    plt.xlabel(choice.capitalize()+'s')
     plt.ylabel('Amount of Crimes')
     
     ########### TIME-SERIES ############
@@ -427,11 +508,72 @@ if __name__ == '__main__':
     color_map = ['blue'] * len(node_features.index)
     for node in nodes:
         color_map[node] = 'red'
+        mapping_lat_long[node].append('red')
+        print(node,'+-----------------------------------------+', mapping_lat_long[node])
+        
 
     nx.draw(G, node_color=color_map, with_labels=True)
+    color_map2 = color_map
+    
+    plt.subplot(223)
+    likeability_scores = np.array(frequencies_nodes_selected)
+    data_normalizer = mp.colors.Normalize()
+    color_map = mp.colors.LinearSegmentedColormap(
+        "my_map",
+        {
+            "red": [(0, 1.0, 1.0),
+                    (1.0, .5, .5)],
+            "green": [(0, 0.5, 0.5),
+                    (1.0, 0, 0)],
+            "blue": [(0, 0.50, 0.5),
+                    (1.0, 0, 0)]
+        }
+        )
+    plt.bar(weekdays, frequencies_nodes_selected, 
+            color=color_map(data_normalizer(likeability_scores))
+            ,width = 0.4)
 
     plt.show()
     #umap 
     #t-sne
+
+    print("@@@@@@@@@@@@@@@",mapping_lat_long)
+   
+
+    #### show a map with folium ####
+    lat_long = [-23.545043, -46.703592]
     
+    import webbrowser
     
+    m = folium.Map(location=[lat_long[0], lat_long[1]], zoom_start=15, tiles='CartoDB positron')
+
+    """
+    nearest=ch.query_point_in_city_mesh(lat_long[0], lat_long[1], True)
+    print(nearest)
+    folium.CircleMarker(rectangle_center, radius=5, color='blue').add_to(m)
+    folium.CircleMarker(ch.city_vert_list[nearest], radius=8, color='pink').add_to(m)
+    """
+    # edges
+    for i in range(len(df_aristas)):
+        folium.PolyLine([(df_aristas['lat1'][i], df_aristas['long1'][i]), 
+                         (df_aristas['lat2'][i], df_aristas['long2'][i]) ],
+                           color="yellow", weight=2.5, opacity=1).add_to(m)
+
+    # nodes
+    
+    for vert in mapping_lat_long:
+        color_node = 'blue'
+        
+        lat = mapping_lat_long[vert][0]
+        long = mapping_lat_long[vert][1]
+        color_node = mapping_lat_long[vert][2] if len(mapping_lat_long[vert]) == 3 else 'blue'
+        
+        folium.CircleMarker( [lat, long], 
+                            radius=5, color=color_node,
+                            popup=str(vert)+' '+str(lat)+','+str(long)).add_to(m)
+    
+    print('**********************',mapping)
+    
+    m.save("map.html")
+    webbrowser.open("map.html")
+    #m.showMap()
