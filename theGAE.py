@@ -36,12 +36,15 @@ import time
 import datetime
 
 # Ruta para guardar los pesos y parametros del modelo
-model_path = 'gae_modelTt8' #'gae_modelVM7small_' #'gae_model48229092023125608'  #gae_model52
-model_loaded_bool = False   # False para entrenar
+model_path = 'gae_model'
+model_path0 = 'gae_model100.pth'
+model_path2 = 'gae_model1000.pth'
+model_path3 = 'gae_model10000.pth'
+model_loaded_bool = False  # False para entrenar
 
 np.random.seed(37)
-Fig1 = True
-Fig2 = True
+Fig1 = False
+Fig2 = False
 
 def generate_sufix_for_file():
     # Obtener la fecha y hora actual
@@ -61,30 +64,37 @@ def read_graph_from_csv(file1, file2, G, edges, labels):
     
     df_nodos = pd.read_csv(file1)
     df_aristas = pd.read_csv(file2)
-    
+
     numeric_features = df_nodos.columns.tolist()[1:-2]  # get all columns except lat and long
     lat_long_nodes = df_nodos.columns.tolist()[-2:] # get just lat and long
-    print('lat_long_nodes', lat_long_nodes)
+    #print('lat_long_nodes', lat_long_nodes)
 
-    #labels = []
     for i in numeric_features:
         labels.append(df_nodos[i].sum())
     #print('++++ frecuencias', labels, 'end', type(labels))
     
     # For DEBUGGING
+    #print('ooo',numeric_features)
     global mapping_lat_long, mapping
     mapping = {}
     mapping_lat_long = {}
-    
+
     print('adding nodes')
     # Add nodes
     for i in range(len(df_nodos)):
+        #print(df_nodos.iloc[i,0], df_nodos.iloc[i,1])
         nodo_id = G.number_of_nodes() 
         mapping[df_nodos['Nodo'][i]] = nodo_id
-        features_values = [df_nodos[x][i] for x in numeric_features] # lat_long_nodes
+        features_values = [df_nodos[x][i] for x in numeric_features]# lat_long_nodes
+        #print('feat_nodes', [df_nodos[x][i] for x in numeric_features])
         G.add_node(nodo_id, features={"crime_type": features_values })
         mapping_lat_long[nodo_id] = [df_nodos['lat'][i] ,df_nodos['long'][i] ]
+        #labels.append(features_values)
 
+    """nodos_lat_long_sem_crimes = get_nodes_lat_long_without_crimes(df_nodos, df_aristas)
+    for i in range(len(nodos_lat_long_sem_crimes)):
+        nodo_id = G.number_of_nodes() 
+    """
     print('adding edges')
     # Add edges
     for i in range(len(df_aristas)):
@@ -118,7 +128,7 @@ def help_function():
     #print("Run with a graph using csv with just one feature: \n python theGAE.py -csv -f=1")
 
 # python mainGae.py -csv -dd -h=8
-
+    
 if __name__ == '__main__':
     # Crear el grafo de Networkx con nodos geolocalizados y 8 caracteristicas
     G = nx.Graph()
@@ -140,10 +150,10 @@ if __name__ == '__main__':
     if (len(sys.argv)==1 or sys.argv[1] =="-help"):
         help_function()
         sys.exit()
-    
+
     elif(sys.argv[1] =="-csv"):
         print("Graph from csv")
-        n_components = 3
+        n_components = 3 # contar_elementos_no_repetidos(labels)
         
         # criar histograma naranja por quantidade de crime
         if (Fig1): plt.subplot(232)
@@ -171,11 +181,11 @@ if __name__ == '__main__':
                 #hidden_dim = 8 #12
                 bins_customized = 12
                 weekdays = np.array(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct','Nov','Dec'])
-            
+
             elif(sys.argv[2] == "-md"): # month demographic
                 choice = 'month with demographic socio-economic'
                 file_str = subgraph+'_DEMOG.csv'
-                #hidden_dim = 18
+                #hidden_dim = 18 
                 bins_customized = 32
                 # Nodo,january,february,march,april,may,june,july,august,september,october,november,december,lat,long,Household_income_avg,Householder_income_avg,Householder_unemployment_rate,Literate_7_15_yrs_children_rate,residents_under_18_years_rate,residents_aged_18_to_65_years_rate,residents_over_65_years_rate,bus_stops,subway_stations,train_stations,bus_terminals,subnormal_agglomerates_around,crime_mobile,crime_vehicle,crime_all,precipitation_total,temperature_max,temperature_min
                 weekdays = np.array(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct','Nov','Dec','Renda_media_por_domicilio', 'Renda_media_responsaveis', 'Responsaveis_sem_renda_taxa', 'Alfabetizados_de_7_a_15_anos', 'menores_de_18_anos_taxa', '18_a_65_anos_taxa', 'maiores_de_65_anos_taxa', 'Pontos_de_onibus', 'Estacao_de_metro', 'Estacao_de_trem', 'Terminal_de_onibus', 'Favela_proxima'])
@@ -183,7 +193,7 @@ if __name__ == '__main__':
             elif(sys.argv[2] == "-dd"): # daily demographic
                 choice = 'daily with demographic socio-economic'
                 file_str = subgraph+'_DEMOG.csv'
-                #hidden_dim = 189 
+                #hidden_dim = 30 
                 bins_customized = 32
                 # Nodo,january,february,march,april,may,june,july,august,september,october,november,december,lat,long,Household_income_avg,Householder_income_avg,Householder_unemployment_rate,Literate_7_15_yrs_children_rate,residents_under_18_years_rate,residents_aged_18_to_65_years_rate,residents_over_65_years_rate,bus_stops,subway_stations,train_stations,bus_terminals,subnormal_agglomerates_around,crime_mobile,crime_vehicle,crime_all,precipitation_total,temperature_max,temperature_min
                 weekdays = np.array(['d0', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd9', 'd10', 'd11', 'd12', 'd13', 'd14', 'd15', 'd16', 'd17', 'd18', 'd19', 'd20', 'd21', 'd22', 'd23', 'd24', 'd25', 'd26', 'd27', 'd28', 'd29', 'd30', 'd31', 'd32', 'd33', 'd34', 'd35', 'd36', 'd37', 'd38', 'd39', 'd40', 'd41', 'd42', 'd43', 'd44', 'd45', 'd46', 'd47', 'd48', 'd49', 'd50', 'd51', 'd52', 'd53', 'd54', 'd55', 'd56', 'd57', 'd58', 'd59', 'd60', 'd61', 'd62', 'd63', 'd64', 'd65', 'd66', 'd67', 'd68', 'd69', 'd70', 'd71', 'd72', 'd73', 'd74', 'd75', 'd76', 'd77', 'd78', 'd79', 'd80', 'd81', 'd82', 'd83', 'd84', 'd85', 'd86', 'd87', 'd88', 'd89', 'd90', 'd91', 'd92', 'd93', 'd94', 'd95', 'd96', 'd97', 'd98', 'd99', 'd100', 'd101', 'd102', 'd103', 'd104', 'd105', 'd106', 'd107', 'd108', 'd109', 'd110', 'd111', 'd112', 'd113', 'd114', 'd115', 'd116', 'd117', 'd118', 'd119', 'd120', 'd121', 'd122', 'd123', 'd124', 'd125', 'd126', 'd127', 'd128', 'd129', 'd130', 'd131', 'd132', 'd133', 'd134', 'd135', 'd136', 'd137', 'd138', 'd139', 'd140', 'd141', 'd142', 'd143', 'd144', 'd145', 'd146', 'd147', 'd148', 'd149', 'd150', 'd151', 'd152', 'd153', 'd154', 'd155', 'd156', 'd157', 'd158', 'd159', 'd160', 'd161', 'd162', 'd163', 'd164', 'd165', 'd166', 'd167', 'd168', 'd169', 'd170', 'd171', 'd172', 'd173', 'd174', 'd175', 'd176', 'd177', 'd178', 'd179', 'd180', 'd181', 'd182', 'd183', 'd184', 'd185', 'd186', 'd187', 'd188', 'd189', 'd190', 'd191', 'd192', 'd193', 'd194', 'd195', 'd196', 'd197', 'd198', 'd199', 'd200', 'd201', 'd202', 'd203', 'd204', 'd205', 'd206', 'd207', 'd208', 'd209', 'd210', 'd211', 'd212', 'd213', 'd214', 'd215', 'd216', 'd217', 'd218', 'd219', 'd220', 'd221', 'd222', 'd223', 'd224', 'd225', 'd226', 'd227', 'd228', 'd229', 'd230', 'd231', 'd232', 'd233', 'd234', 'd235', 'd236', 'd237', 'd238', 'd239', 'd240', 'd241', 'd242', 'd243', 'd244', 'd245', 'd246', 'd247', 'd248', 'd249', 'd250', 'd251', 'd252', 'd253', 'd254', 'd255', 'd256', 'd257', 'd258', 'd259', 'd260', 'd261', 'd262', 'd263', 'd264', 'd265', 'd266', 'd267', 'd268', 'd269', 'd270', 'd271', 'd272', 'd273', 'd274', 'd275', 'd276', 'd277', 'd278', 'd279', 'd280', 'd281', 'd282', 'd283', 'd284', 'd285', 'd286', 'd287', 'd288', 'd289', 'd290', 'd291', 'd292', 'd293', 'd294', 'd295', 'd296', 'd297', 'd298', 'd299', 'd300', 'd301', 'd302', 'd303', 'd304', 'd305', 'd306', 'd307', 'd308', 'd309', 'd310', 'd311', 'd312', 'd313', 'd314', 'd315', 'd316', 'd317', 'd318', 'd319', 'd320', 'd321', 'd322', 'd323', 'd324', 'd325', 'd326', 'd327', 'd328', 'd329', 'd330', 'd331', 'd332', 'd333', 'd334', 'd335', 'd336', 'd337', 'd338', 'd339', 'd340', 'd341', 'd342', 'd343', 'd344', 'd345', 'd346', 'd347', 'd348', 'd349', 'd350', 'd351', 'd352', 'd353', 'd354', 'd355', 'd356', 'd357', 'd358', 'd359', 'd360', 'd361', 'd362', 'd363', 'd364', 'd365','Renda_media_por_domicilio', 'Renda_media_responsaveis', 'Responsaveis_sem_renda_taxa', 'Alfabetizados_de_7_a_15_anos', 'menores_de_18_anos_taxa', '18_a_65_anos_taxa', 'maiores_de_65_anos_taxa', 'Pontos_de_onibus', 'Estacao_de_metro', 'Estacao_de_trem', 'Terminal_de_onibus', 'Favela_proxima'])
@@ -214,7 +224,6 @@ if __name__ == '__main__':
                 out_dim = int(sys.argv[4])
             if (sys.argv[5]):
                 num_epochs = int(sys.argv[5])
-   
         else:
             print('else', len(sys.argv))
             help_function()
@@ -225,10 +234,11 @@ if __name__ == '__main__':
         file3 += subgraph+'.csv'
         
         numeric_features = read_graph_from_csv(file1, file2, G, edges, labels)
+        
         if( Fig1):
             plt.bar(weekdays, labels, color ='#F47C2F',width = 0.4)
+            #plt.hist(labels, bins=bins_customized)
             plt.title("Subgraph crime histogram")
-    # hidden, out_dim, epochs
 
     # Grafo de todos los nodos de mi datase
     random.seed(37)
@@ -278,22 +288,37 @@ if __name__ == '__main__':
     # Asegurarse de que los indices de los bordes sean unicos y en el rango correcto
     edge_index, _ = utils.add_self_loops(edge_index, num_nodes=num_nodes)
 
-
     from torch_geometric.nn import GAE
     # Definir el modelo 2 del grafo autoencoder
+
+
     class GCNEncoder(torch.nn.Module):
         def __init__(self, input_dim, hidden_dim, out_dim):
             torch.random.manual_seed(37)
             super(GCNEncoder, self).__init__()
-            self.conv1 = GCNConv(input_dim, hidden_dim, cached=True) # cached only for transductive learning
-            self.conv2 = GCNConv(hidden_dim, out_dim, cached=True) # cached only for transductive learning
+            self.conv1 = GCNConv(input_dim, hidden_dim, cached=True)  # cached only for transductive learning
+            self.conv2 = GCNConv(hidden_dim, out_dim, cached=True)    # cached only for transductive learning
 
         def forward(self, x, edge_index):
             x = self.conv1(x, edge_index).relu()
             return self.conv2(x, edge_index)
 
+
+    # Pro model 2 
+    print('Torch esta disponivel?', torch.cuda.is_available())
+    print('weekdays-->',len(weekdays),'hidden_dim -->', hidden_dim, 'out_dim-->', out_dim)
+    # move to GPU (if available)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #numeric_features.to(device)
+    #G.to(device)
+    
     # Definir los hiperparametros del modelo 1
     input_dim = features.size(1)
+    features = features.to(device)
+    edge_index = edge_index.to(device)
+
+    
+    #hidden_dim = 40 # Already defined above 
     
     # Crear una instancia del modelo 2
     model = GAE(GCNEncoder(input_dim, hidden_dim, out_dim))
@@ -315,9 +340,10 @@ if __name__ == '__main__':
         loss.backward()
         optimizer.step()
         return float(loss)
-    
+
     # si no tengo los pesos guardados de mi modelo
-    if (not model_loaded_bool): 
+    if (not model_loaded_bool):
+
         # Entrenar el modelo 2
         for epoch in range(1, num_epochs+1):
             loss = train()
@@ -331,12 +357,28 @@ if __name__ == '__main__':
         print('Loading model ...')
         # Cargar los pesos y parametros del modelo guardado
         model.load_state_dict(torch.load(model_path+'.pth'))
+        print('extra training')
+
+        # extra training
+        num_epochs = 10000
+        for epoch in range(100, num_epochs+1):
+            loss = train()
+        model_path = model_path + subgraph + str(num_epochs) +sufix_for_file+'.pth'	
+        torch.save(model.state_dict(), model_path) 
+        print('Model parameters saved ... step 2 ',model_path)
 
     # Mover el modelo a la GPU si esta disponible
     #loaded_model = loaded_model.to(device)
 
-    # Encoding for model
-    embeddings = model.encode(features, edge_index).detach().numpy()
+    # Encoding for model 2
+    embeddings = model.encode(features, edge_index).detach().cpu().numpy()
+    print('-- embeddings ')
+    df_nodos = pd.read_csv(file1)
+    columna_nodo = df_nodos['Nodo']
+
+    # save embeddings with out_dim
+    nuevo_dataframe = pd.concat([columna_nodo, pd.DataFrame(embeddings)], axis=1)
+    np.savetxt("embeddings" + sufix_for_file + ".txt", nuevo_dataframe, delimiter=",")
     
     # Calcular el tiempo transcurrido
     end_time = time.time()
@@ -345,40 +387,56 @@ if __name__ == '__main__':
     print("Tiempo de ejecucion (seg.):", elapsed_time)
 
     # Creating a metadata file using the sufix_for_file #
-    texto_usuario = input("Add some extra info to create a metadata file: ")
+    #texto_usuario = input("Add some extra info to create a metadata file: ")
     name_metadataFile = "metadata_"+sufix_for_file+".txt"
     with open(name_metadataFile, 'w') as archivo:
         archivo.write("== NAME FILE: "+ sufix_for_file+" == \n")
         archivo.write("Execution time of training (seg.):"+str(elapsed_time)+"\n" )
-        archivo.write("Description: "+ texto_usuario+"\n")
+        #archivo.write("Description: "+ texto_usuario+"\n")
         archivo.write("+ Hiperparametros: \n"+ "nro de epocas: "+str(num_epochs)+"\n")
         archivo.write("Dimentions: " + str(len(weekdays)) + " -> "+ str(hidden_dim) + " -> " + str(out_dim))
+
     print(f"Text saved on '{name_metadataFile}'.")
 
     ########### TSNE ############
     from sklearn.manifold import TSNE
     
-    tsne = TSNE(n_components=2, random_state=37) #42 #init='pca', 
-    
+    tsne = TSNE(n_components=2, random_state=37, init='random') #42 #init='pca', 
+    print("start tsne")
+    # Guardar el tiempo de inicio
+    start_time = time.time()
+
+    print("fit transform", type(embeddings)) # numpy.ndarray
+    print(embeddings.shape)                  # 119748, 50
     # Perform t-SNE dimensionality reduction
     X_tsne = tsne.fit_transform(embeddings)
+
+    # Calcular el tiempo transcurrido
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print("end tsne", elapsed_time)
+
     indices = np.arange(len(X_tsne))
-    print('+++ \n', len(X_tsne))
-    
+    #print('+++ \n', len(X_tsne))
+    print(" 1 ")
+
+    # Combinar indices y resultados de t-SNE
+    tsne_with_indices = np.column_stack((indices, X_tsne))
+
+
+    #np.savetxt("tsne_results" + subgraph + sufix_for_file + ".txt", tsne_with_indices, delimiter=",")
+    #print("Saved TSNE results ", "tsne_results" + subgraph + sufix_for_file + ".txt")
+    print(" 2 ")
+
     mid = int(len(embeddings)/2)
-    
+    #print('mid ======================================= ', X_tsne[:,0][0:mid])
     # Display the plot
     if Fig1 : plt.subplot(233)
-     
-    # Create a scatter plot with different colors for each cluster
-    """k = 0
-    for i in X_tsne:
-        print(node_features3.iloc[k].values.sum())
-        plt.text(i[0], i[1],k)
-        k +=1
-    plt.scatter(X_tsne[:, 0], X_tsne[:, 1], cmap='viridis')  # c=labels"""
 
+    print('**** data') 
+    # Create a scatter plot with different colors for each cluster
     node_features3 = pd.DataFrame.from_dict(data)
+   
     flag_zeros_ts = []  # si mi nodo tiene 0 crimenes
     k = 0
     for i in X_tsne:
@@ -388,13 +446,16 @@ if __name__ == '__main__':
         else:
             plt.scatter(i[0], i[1], color='blue')
             flag_zeros_ts.append(1)
-        plt.text(i[0], i[1], k)
-        k += 1
-
+        plt.text(i[0], i[1],k)
+        k +=1
     # Combinar indices y resultados de t-SNE
     tsne_with_indices = np.column_stack((indices, X_tsne,flag_zeros_ts))
     np.savetxt("tsne_results"+subgraph+ sufix_for_file +".txt", tsne_with_indices, delimiter=",")
     print ("t-SNE results saved ... ", "tsne_results"+subgraph+ sufix_for_file +".txt")
+
+    with open(name_metadataFile, 'a') as archivo:
+        archivo.write("TSNE elapsed time:"+ str(elapsed_time))
+
     # Add a colorbar legend
     plt.colorbar()
     
@@ -402,7 +463,9 @@ if __name__ == '__main__':
     plt.xlabel('t-SNE Dimension 1')
     plt.ylabel('t-SNE Dimension 2')
     plt.title('t-SNE Visualization with Clusters')
+    
     ########### TSNE ############
+    
 
     ########### kmeans ############
     
@@ -464,7 +527,6 @@ if __name__ == '__main__':
         plt.plot(weekdays, dataframe.frequency, marker='o', label="node "+str(nodes[i]))
 
     print("end loop")
-    
     if (Fig2):
         # Giving title to the chart using plt.title and a legend
         plt.title('Crimes by '+ choice)
@@ -476,7 +538,7 @@ if __name__ == '__main__':
         # Providing x and y label to the chart
         plt.xlabel(choice.capitalize()+'s')
         plt.ylabel('Amount of Crimes')
-
+    
     ########### TIME-SERIES ############
     if (Fig2):
         # Bar chart (#2)
@@ -516,14 +578,14 @@ if __name__ == '__main__':
         plt.show()
     #umap 
     #t-sne
-     
+
     #### SHOW a map with folium ####
     
     lat_long = [-23.5961263, -46.6659277]
-
+    
     m = folium.Map(location=[lat_long[0], lat_long[1]], zoom_start=15, tiles='CartoDB positron')
     print('here 3')
-    
+
     # edges
     for i in range(len(df_aristas)):
         folium.PolyLine([(df_aristas['lat1'][i], df_aristas['long1'][i]), 
@@ -544,6 +606,6 @@ if __name__ == '__main__':
     
     #print('**********************',mapping)
     map_file_name = "map"+ subgraph +sufix_for_file+".html"
-    m.save(map_file_name)
+    #m.save(map_file_name)
     print(map_file_name+ " saved")
     #webbrowser.open(map_file_name)
