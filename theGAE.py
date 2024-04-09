@@ -297,6 +297,17 @@ if __name__ == '__main__':
         def forward(self, x, edge_index):
             x = self.conv1(x, edge_index).relu()
             return self.conv2(x, edge_index)
+    
+    class GCNDecoder(torch.nn.Module):
+        def __init__(self, input_dim, hidden_dim, out_dim):
+            torch.random.manual_seed(37)
+            super(GCNDecoder, self).__init__()
+            self.conv1 = GCNConv(out_dim, hidden_dim, cached=True)  # cached only for transductive learning
+            self.conv2 = GCNConv(hidden_dim, input_dim, cached=True)    # cached only for transductive learning
+
+        def forward(self, x, edge_index):
+            x = self.conv1(x, edge_index).relu()
+            return self.conv2(x, edge_index)
 
 
     print('Torch esta disponivel?', torch.cuda.is_available())
