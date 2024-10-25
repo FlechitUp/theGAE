@@ -26,7 +26,6 @@ import torch_geometric.utils as utils
 import matplotlib as mp
 import matplotlib.pyplot as plt
 import sys
-import networkx as nx
 from collections import Counter
 import ast
 import random
@@ -34,6 +33,7 @@ import folium
 import webbrowser   #para ver el mapa
 import time
 import datetime
+from torch_geometric.utils import subgraph
 
 # Path to save the weights and parameters of the model
 model_path = 'gae_model'
@@ -57,14 +57,57 @@ def add_edges( G, edge_tuples):
     for edge in edge_tuples:
         G.add_edge(edge[0], edge[1])
 
-def read_graph_from_csv(file1, file2, G, edges, labels):
+def read_graph_from_csv(file1, file2, G, edges, labels, features_type='A', normalized=True):
     global lat_long_nodes
     global df_aristas
+    RANGE_START = None
+    RANGE_END = None
+    RANGE_START_2 = None
+    RANGE_END_2 = None
     
     df_nodos = pd.read_csv(file1)
     df_aristas = pd.read_csv(file2)
 
-    numeric_features = df_nodos.columns.tolist()[1:-2]  # get all columns except lat and long
+    if (normalized):
+        # Normalize dataset # print(file1)
+        # Definir las columnas que se normalizarán (columnas intermedias)
+        columns_to_normalize = df_nodos.columns[1:-1]  # Excluyendo la primera y las dos últimas columnas
+
+        # Normalizar solo las columnas intermedias
+        scaler = StandardScaler()
+        df_nodos[columns_to_normalize] = scaler.fit_transform(df_nodos[columns_to_normalize])
+
+    # RANGE OF THE FEATURES THAT WILL BE USED FROM THE CSV 
+    if (features_type == 'A'): # ALL: CENSO + INFRAESTRUCTURE + CRIMES
+        RANGE_START = 1
+        RANGE_END = -2
+    elif (features_type == 'IC'): # INFRAESTRUCTURE + CRIMES
+        RANGE_START = 8
+        RANGE_END = -2
+    elif (features_type == 'IS'): # INFRAESTRUCTURE + CENSO
+        RANGE_START = 1
+        RANGE_END = 13
+    elif (features_type == 'SC') or (features_type == 'CS'): # CENSO + CRIMES
+        RANGE_START = 1
+        RANGE_END = 8
+        RANGE_START_2 = 13
+        RANGE_END_2 = 379
+    elif (features_type == 'C'): # only CRIMES
+        RANGE_START = 13
+        RANGE_END = 379
+
+
+    # get all columns that I will use from the csv except lat and long
+    if RANGE_START_2 is not None and RANGE_END_2 is not None:
+        numeric_features = df_nodos.columns.tolist()[RANGE_START:RANGE_END] + \
+                       df_nodos.columns.tolist()[RANGE_START_2:RANGE_END_2]
+    else:
+        numeric_features = df_nodos.columns.tolist()[RANGE_START:RANGE_END]
+
+    #print('****', numeric_features)
+    #input('ingrese nro')
+    
+    # get just lat and long
     lat_long_nodes = df_nodos.columns.tolist()[-2:] # get just lat and long
     
     for i in numeric_features:
@@ -82,7 +125,11 @@ def read_graph_from_csv(file1, file2, G, edges, labels):
         nodo_id = G.number_of_nodes() 
         mapping[df_nodos['Nodo'][i]] = nodo_id
         features_values = [df_nodos[x][i] for x in numeric_features]# lat_long_nodes
-        #print('feat_nodes', [df_nodos[x][i] for x in numeric_features])
+        """
+        # Activate only to save the input features that this code is using 
+        with open('output.txt', 'a') as file:  # Abre el archivo en modo de agregar ('a')
+            file.write(f"{df_nodos['Nodo'][i]}, {', '.join(map(str, features_values))}\n")  # Escribe el ID del nodo seguido por los valores de features_values
+        """
         G.add_node(nodo_id, features={"crime_type": features_values })
         mapping_lat_long[nodo_id] = [df_nodos['lat'][i] ,df_nodos['long'][i] ]
         #labels.append(features_values)
@@ -119,6 +166,20 @@ def read_graph_from_csv(file1, file2, G, edges, labels):
         
     return numeric_features
 
+def get_name_of_data(feat_type):
+    if feat_type == 'A':
+        return 'All'
+    elif feat_type == 'C':
+        return 'Crime only'
+    elif feat_type == 'CS' or feat_type == 'SC':
+        return 'Crime + Census'
+    elif feat_type == 'IC':
+        return 'Infraestructure + Crime'
+    elif feat_type == 'IS':
+        return 'Infraestructure + Census'
+    
+
+
 def help_function():
     print("Run with a graph using csv: \n python theGAE.py -csv -dd hidden_dim output_dim num_epochs")
     #print("Run with a graph using csv with just one feature: \n python theGAE.py -csv -f=1")
@@ -137,6 +198,7 @@ if __name__ == '__main__':
     numeric_features = []
     weekdays = []
     choice = ''
+    features_type = 'A'
 
     # Save the start time
     start_time = time.time()
@@ -154,9 +216,9 @@ if __name__ == '__main__':
         # criar histograma naranja por quantidade de crime
         if (Fig1): plt.subplot(232)
         
-        if ( len(sys.argv) == 6 ):
+        if ( len(sys.argv) == 9 ):
             print("Graph from csv with hidden_dim, output_dim and num_epochs")
-            subgraph = 'SPdaily' #'Tt8' 'VM7' #82 'SP'
+            subgraph_ = 'SPdaily' #'Tt8' 'VM7' #82 'SP'
             '''
             '52' // Case Study
             '6'  // Av. Paulista Bairro perigoso
@@ -166,21 +228,21 @@ if __name__ == '__main__':
         
             if (sys.argv[2] =="-f=1" or sys.argv[2] == "-1"):
                 choice = 'Frequency'
-                file_str = subgraph+'all.csv'
+                file_str = subgraph_+'all.csv'
                 bins_customized = 'auto' #max(max(arr) for arr in labels)
                 #hidden_dim = 1
                 weekdays = np.array(['Frequency'])
 
             elif(sys.argv[2] =="-f=month" or sys.argv[2] == "-m"):
                 choice = 'month'
-                file_str = subgraph+'month.csv'
+                file_str = subgraph_+'month.csv'
                 #hidden_dim = 8 #12
                 bins_customized = 12
                 weekdays = np.array(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct','Nov','Dec'])
 
             elif(sys.argv[2] == "-md"): # month demographic
                 choice = 'month with demographic socio-economic'
-                file_str = subgraph+'_DEMOG.csv'
+                file_str = subgraph_+'_DEMOG.csv'
                 #hidden_dim = 18 
                 bins_customized = 32
                 # Nodo,january,february,march,april,may,june,july,august,september,october,november,december,lat,long,Household_income_avg,Householder_income_avg,Householder_unemployment_rate,Literate_7_15_yrs_children_rate,residents_under_18_years_rate,residents_aged_18_to_65_years_rate,residents_over_65_years_rate,bus_stops,subway_stations,train_stations,bus_terminals,subnormal_agglomerates_around,crime_mobile,crime_vehicle,crime_all,precipitation_total,temperature_max,temperature_min
@@ -188,7 +250,7 @@ if __name__ == '__main__':
 
             elif(sys.argv[2] == "-dd"): # daily demographic
                 choice = 'daily with demographic socio-economic'
-                file_str = subgraph+'_DEMOG.csv'
+                file_str = subgraph_+'_DEMOG.csv'
                 #hidden_dim = 30 
                 bins_customized = 32
                 # Nodo,january,february,march,april,may,june,july,august,september,october,november,december,lat,long,Household_income_avg,Householder_income_avg,Householder_unemployment_rate,Literate_7_15_yrs_children_rate,residents_under_18_years_rate,residents_aged_18_to_65_years_rate,residents_over_65_years_rate,bus_stops,subway_stations,train_stations,bus_terminals,subnormal_agglomerates_around,crime_mobile,crime_vehicle,crime_all,precipitation_total,temperature_max,temperature_min
@@ -196,40 +258,46 @@ if __name__ == '__main__':
 
             elif(sys.argv[2] == "-mto"):
                 choice = 'month with Tipe of crime'
-                file_str = subgraph+'monthTO.csv'
+                file_str = subgraph_+'monthTO.csv'
                 #hidden_dim = 8 #12
                 bins_customized = 14
-                weekdays = np.array(['TIPO_OCORRENCIA_FURTO', 'TIPO_OCORRENCIA_ROUBO', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct','Nov','Dec'])
+                weekdays = ngp.array(['TIPO_OCORRENCIA_FURTO', 'TIPO_OCORRENCIA_ROUBO', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct','Nov','Dec'])
 
             elif(sys.argv[2] =="-f=period" or sys.argv[2] == "-p" ):
                 choice = 'period'
-                file_str = subgraph+'period.csv'
+                file_str = subgraph_+'period.csv'
                 #hidden_dim = 5
                 bins_customized = 5
                 weekdays = np.array(['Unknow', 'morning', 'afternoon', 'night', 'early_morning'])
             
             elif(sys.argv[2] == "-f=week" or sys.argv[2] == "-w"):
                 choice = 'weekday'
-                file_str = subgraph+'week.csv'
+                file_str = subgraph_+'week.csv'
                 #hidden_dim = 6 #7
                 bins_customized=7
                 weekdays = np.array(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
             if (sys.argv[3]):
                 hidden_dim = int(sys.argv[3])
             if (sys.argv[4]):
-                out_dim = int(sys.argv[4])
+                hidden_dim2 = int(sys.argv[4])
             if (sys.argv[5]):
-                num_epochs = int(sys.argv[5])
+                out_dim = int(sys.argv[5])
+            if (sys.argv[6]):
+                num_epochs = int(sys.argv[6])
+            if (sys.argv[7]):
+                features_type = str(sys.argv[7])
+            if (sys.argv[8]):
+                normalize_bool = True if str(sys.argv[8]) == 'T' else False
         else:
             print('else', len(sys.argv))
             help_function()
             sys.exit()
 
         file1 += file_str
-        file2 += subgraph+'.csv'
-        file3 += subgraph+'.csv'
+        file2 += subgraph_+'.csv'
+        file3 += subgraph_+'.csv'
         
-        numeric_features = read_graph_from_csv(file1, file2, G, edges, labels)
+        numeric_features = read_graph_from_csv(file1, file2, G, edges, labels, features_type, normalize_bool)
         
         if( Fig1):
             plt.bar(weekdays, labels, color ='#F47C2F',width = 0.4)
@@ -253,15 +321,60 @@ if __name__ == '__main__':
         for node in G.nodes(data=True):
             if 'features' in node[1] and 'crime_type' in node[1]['features']:
                 temp_arr.append(node[1]['features']['crime_type'][k])
+
             else:
                 # Agregar features con 'crime_type' en [0,0,0,...,0]
-                G.nodes[node[0]]['features'] = {'crime_type': [0] * len(weekdays)}
+                G.nodes[node[0]]['features'] = {'crime_type': [0] *len(numeric_features)}
                 temp_arr.append(node[1]['features']['crime_type'][k])
                 nodo_id = G.number_of_nodes() 
                 
         data[i] = temp_arr
         k = k + 1
-    print('fim')
+
+    #### Community-based Split ##############################################
+    
+    from networkx.algorithms.community import greedy_modularity_communities
+    # Detectar comunidades utilizando la heurística de modularidad
+    communities = list(greedy_modularity_communities(G))
+
+    # Ordenar las comunidades por tamaño en sentido decreciente
+    communities = sorted(communities, key=len, reverse=True)
+
+    # Combinar comunidades hasta obtener aproximadamente el 80% de nodos en el subconjunto de entrenamiento
+    train_nodes = set()
+    test_nodes = set()
+
+    total_nodes = G.number_of_nodes()
+    target_train_size = int(total_nodes * 0.8)
+
+    for community in communities:
+        if len(train_nodes) + len(community) <= target_train_size:
+            train_nodes.update(community)
+        else:
+            test_nodes.update(community)
+
+    # Verifica si hay comunidades restantes para el grafo de prueba
+    if len(train_nodes) < target_train_size and len(communities) > 0:
+        remaining_community = communities[len(train_nodes) % len(communities)]
+        train_nodes.update(remaining_community)
+        communities.remove(remaining_community)
+        for community in communities:
+            test_nodes.update(community)
+
+    train_graph = G.subgraph(train_nodes).copy()
+    test_graph = G.subgraph(test_nodes).copy()
+
+    print(f"Nodos en el grafo de entrenamiento: {len(train_nodes)}")
+    print(f"Nodos en el grafo de prueba: {len(test_nodes)}")
+
+    num_nodos = G.number_of_nodes()
+    print(f"The graph has {num_nodos} nodes.")
+    
+    print('train_graph',train_graph)
+    print('test_graph', test_graph)
+
+
+    ########################################
     
     node_features = pd.DataFrame.from_dict(data)
 
@@ -271,115 +384,171 @@ if __name__ == '__main__':
     
     # Split the nodes into training and testing
     train_nodes, test_nodes = train_test_split(node_features.index, train_size=0.8, test_size=0.2)
-    
-    # Convert the features into PyTorch tensors
-    features = torch.FloatTensor(node_features.values)
+    print('node_features', node_features.values)
+    print('train_nodes', train_nodes)
+
+     # Convert the features into PyTorch tensors
+    train_nodes = torch.FloatTensor(train_nodes) ###(node_features.values)
+    test_nodes = torch.FloatTensor(test_nodes)
     
     # Create the indices of the edges
     edge_index = torch.LongTensor(list(edges)).t().contiguous()
+    print('edge_index', type(edge_index))
+
+    ###################################################
+    # Convierte los nodos de entrenamiento y prueba a tensores
+    train_nodes = train_nodes.clone().detach().long()
+    #test_nodes = torch.tensor(test_nodes, dtype=torch.long) # why did i do left this line ?
+    test_nodes = test_nodes.clone().detach().long()
+
+    # Filtra las aristas correspondientes a los nodos de entrenamiento y prueba
+    train_edge_index, _ = subgraph(train_nodes, edge_index, relabel_nodes=True)
+    test_edge_index, _ = subgraph(test_nodes, edge_index, relabel_nodes=True)
+
+    # Obtener las características de los nodos para entrenamiento y prueba
+    train_features = node_features.loc[train_nodes].values
+    test_features = node_features.loc[test_nodes].values
+
+    train_features = torch.from_numpy(train_features)
+    test_features = torch.from_numpy(test_features)
+    print(' __ type', train_features.dtype)
+
+    print(' <- before train_features', train_features.size)
+    
+    # Unnecesary 
+    ##features = torch.tensor(train_features, dtype=torch.long)
+    #print('after features', features.shape, features)
+
+    ####################################################
     
     # Get the number of nodes
-    num_nodes = len(node_features)
+    num_nodes = len(train_features) ###node_features)
+    print('size nodes ', num_nodes)
     
     # Ensure that the edge indices are unique and in the correct range
     edge_index, _ = utils.add_self_loops(edge_index, num_nodes=num_nodes)
 
     from torch_geometric.nn import GAE
+    
     # Define the model of the graph autoencoder
-
     class GCNEncoder(torch.nn.Module):
-        def __init__(self, input_dim, hidden_dim, out_dim):
+        def __init__(self, input_dim, hidden_dim, hidden_dim2, out_dim):
             torch.random.manual_seed(37)
             super(GCNEncoder, self).__init__()
             self.conv1 = GCNConv(input_dim, hidden_dim, cached=True)  # cached only for transductive learning
-            self.conv2 = GCNConv(hidden_dim, out_dim, cached=True)    # cached only for transductive learning
+            self.conv2 = GCNConv(hidden_dim, hidden_dim2, cached=True)
+            self.conv3 = GCNConv(hidden_dim2, out_dim, cached=True)    # cached only for transductive learning
 
         def forward(self, x, edge_index):
             x = self.conv1(x, edge_index).relu()
-            return self.conv2(x, edge_index)
-    
-    class GCNDecoder(torch.nn.Module):
-        def __init__(self, input_dim, hidden_dim, out_dim):
-            torch.random.manual_seed(37)
-            super(GCNDecoder, self).__init__()
-            self.conv1 = GCNConv(out_dim, hidden_dim, cached=True)  # cached only for transductive learning
-            self.conv2 = GCNConv(hidden_dim, input_dim, cached=True)    # cached only for transductive learning
+            x = self.conv2(x, edge_index).relu()
+            print(f"Encoder output shape: {x.shape}")
+            return self.conv3(x, edge_index)
+
+    class Decoder(torch.nn.Module):
+        def __init__(self, in_features, hidden_dim, hidden_dim2, out_features):
+            super(Decoder, self).__init__()
+            self.deconv1 = GCNConv(in_features, hidden_dim2, cached=True)
+            self.deconv2 = GCNConv(hidden_dim2, hidden_dim, cached=True)
+            self.deconv3 = GCNConv(hidden_dim, out_features, cached=True)
 
         def forward(self, x, edge_index):
-            x = self.conv1(x, edge_index).relu()
-            return self.conv2(x, edge_index)
+            x = self.deconv1(x, edge_index).relu()
+            x = self.deconv2(x, edge_index).relu()
+            x = self.deconv3(x, edge_index)
+            print(f"Decoder output shape: {x.shape}")
+            return x
+
+    class GraphAutoencoder(torch.nn.Module):
+        def __init__(self, input_dim, hidden_dim, hidden_dim2, out_dim):
+            super(GraphAutoencoder, self).__init__()
+            self.encoder = GCNEncoder(input_dim, hidden_dim, hidden_dim2, out_dim)
+            self.decoder = Decoder(out_dim, hidden_dim2, hidden_dim, input_dim)  # Reverse order for reconstruction
+
+        def forward(self, x, edge_index):
+            encoded = self.encoder(x, edge_index)
+            decoded = self.decoder(encoded, edge_index)
+            return decoded
 
 
     print('Torch esta disponivel?', torch.cuda.is_available())
-    print('weekdays-->',len(weekdays),'hidden_dim -->', hidden_dim, 'out_dim-->', out_dim)
+    print('weekdays-->',len(numeric_features),'hidden_dim -->', hidden_dim, 'hidden_dim2 -->', hidden_dim2, 'out_dim-->', out_dim)
     # move to GPU (if available)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    ##*# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # numeric_features.to(device)
-    # G.to(device)
+    #G.to(device)
     
     # Define the hyperparameters of model 
-    input_dim = features.size(1)
-    features = features.to(device)
-    edge_index = edge_index.to(device)
+    print(' **/* */*/*', train_features.size(1)) 
+    input_dim = train_features.size(1)
+    features = train_features##*# .to(device)
+    # past line 10/17 >>> edge_index = train_edge_index##*# .to(device)
+    print(type(train_edge_index))
+    edge_index = torch.LongTensor(train_edge_index).t().contiguous()
+    #hidden_dim2 = 90
 
     # Creating an instance of model 
-    model = GAE(GCNEncoder(input_dim, hidden_dim, out_dim))
+    model = GraphAutoencoder(input_dim, hidden_dim, hidden_dim2, out_dim)
 
     # move to GPU (if available)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = model.to(device)
+    ##*# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    ##*# model = model.to(device)
     
     # Define the loss function and the optimizer
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     
-    # Training the model
+    ##*# print(torch.cpu.memory_allocated())    # 11012096 -> Memoria actualmente utilizada en GPU
+    ##*# print(torch.cpu.memory_reserved())     # 23068672 -> Memoria reservada por PyTorch
+
+    # Training the new model_enc_decoder
     def train():
-        model.train()
+        # Verificar el dtype de los parámetros
+        print(f"train_features dtype: {train_features.float().dtype}", train_features.float().shape )
+        print(f"train_edge_index dtype: {train_edge_index.dtype}", train_edge_index.shape)
+
+        # Si hay más parámetros que pasan al modelo, también puedes verificar su dtype
+        output = model(train_features.float(), train_edge_index) #.train() ##(data.x, data.edge_index)
+        #print('output',type(output))
+        loss = criterion(output, train_features.float())
         optimizer.zero_grad()
-        z = model.encode(features, edge_index)
-        loss = model.recon_loss(z, edge_index)
         loss.backward()
         optimizer.step()
         return float(loss)
 
+    name_lossFile = "loss_learnRate"+str(features_type)+sufix_for_file+".txt"
+    
     # If I do not have the saved weights of my model
     if (not model_loaded_bool):
-
         # Training the model
         for epoch in range(1, num_epochs+1):
             loss = train()
+            with open(name_lossFile, 'a+') as archivo:
+                archivo.write(str(loss))
+            #print('Epoch: {:03d}'.format(epoch), 'loss', loss )
             #auc, ap = test(data.test_pos_edge_index, data.test_neg_edge_index)
             #print('Epoch: {:03d}'.format(epoch))
-        model_path = model_path + subgraph + sufix_for_file+'.pth'	
+
+        model_path = model_path + subgraph_ + sufix_for_file+'.pth'	
         torch.save(model.state_dict(), model_path) 
         print('Model parameters saved ... ',model_path)
-    else: 
-        # Load the weights and parameters of the saved model
-        print('Loading model ...')
-        model.load_state_dict(torch.load(model_path+'.pth'))
-        print('extra training')
 
-        # extra training
-        num_epochs = 10000
-        for epoch in range(100, num_epochs+1):
-            loss = train()
-        model_path = model_path + subgraph + str(num_epochs) +sufix_for_file+'.pth'	
-        torch.save(model.state_dict(), model_path) 
-        print('Model parameters saved ... step 2 ',model_path)
+    ##########################################
 
     # Move the model to the GPU if available
     # loaded_model = loaded_model.to(device)
 
     # Encoding for model
-    embeddings = model.encode(features, edge_index).detach().cpu().numpy()
+    print(f"test_features dtype: {test_nodes.float().dtype}", test_nodes.float().shape)
+    print(f"test_edge_index dtype: {test_edge_index.dtype}", test_edge_index.shape)
+    embeddings = model.encoder(test_nodes.float(), test_edge_index).detach().cpu().numpy()
     print('-- embeddings ')
     df_nodos = pd.read_csv(file1)
     columna_nodo = df_nodos['Nodo']
 
     # save embeddings with out_dim
     nuevo_dataframe = pd.concat([columna_nodo, pd.DataFrame(embeddings)], axis=1)
-    np.savetxt("embeddings" + sufix_for_file + ".txt", nuevo_dataframe, delimiter=",")
+    np.savetxt("embeddings" + sufix_for_file + ".csv", nuevo_dataframe, delimiter=",")
     
     # Calculate the elapsed time
     end_time = time.time()
@@ -388,11 +557,15 @@ if __name__ == '__main__':
     print("Tiempo de ejecucion (seg.):", elapsed_time)
 
     # Creating a metadata file using the sufix_for_file 
-    name_metadataFile = "metadata_"+sufix_for_file+".txt"
+    name_metadataFile = "metadata_"+str(features_type)+sufix_for_file+".txt"
     with open(name_metadataFile, 'w') as archivo:
         archivo.write("== NAME FILE: "+ sufix_for_file+" == \n")
         archivo.write("Execution time of training (seg.):"+str(elapsed_time)+"\n" )
+        archivo.write("Features used: "+get_name_of_data(str(features_type))+"\n" )
+        archivo.write("Normalized: "+str(normalize_bool)+"\n" )
         archivo.write("+ Hiperparameters: \n"+ "nro of epochs: "+str(num_epochs)+"\n")
-        archivo.write("Dimentions: " + str(len(weekdays)) + " -> "+ str(hidden_dim) + " -> " + str(out_dim))
+        archivo.write("Dimentions: " + str(len(numeric_features)) + ' -> '+ str(hidden_dim)+ str(hidden_dim2) + ' -> ' + str(out_dim)+"\n")
+        archivo.write("Model file: "+model_path +"\n")
+        archivo.write("Loss file: loss_" +str(features_type)+ sufix_for_file + '.txt')
 
     print(f"Text saved on '{name_metadataFile}'.")
